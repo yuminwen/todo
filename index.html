@@ -231,6 +231,27 @@
       background: #fff0ed;
     }
 
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .complete-all-button {
+      min-height: 34px;
+      padding: 0 10px;
+      border-radius: var(--radius);
+      background: var(--panel-soft);
+      color: var(--primary);
+      font-size: 14px;
+    }
+
+    .complete-all-button:hover {
+      background: #dff0ed;
+    }
+
     .task-list {
       list-style: none;
       margin: 0;
@@ -416,6 +437,10 @@
         align-self: flex-end;
       }
 
+      .toolbar-actions {
+        justify-content: flex-end;
+      }
+
       .task-item {
         grid-template-columns: 34px 1fr auto;
         padding: 10px;
@@ -460,7 +485,10 @@
           <option value="due-asc">截止时间正序</option>
           <option value="due-desc">截止时间倒序</option>
         </select>
-        <button class="clear-button" id="clearDone" type="button">清除已完成</button>
+        <div class="toolbar-actions">
+          <button class="complete-all-button" id="completeAll" type="button">全部完成</button>
+          <button class="clear-button" id="clearDone" type="button">清除已完成</button>
+        </div>
       </div>
 
       <ul class="task-list" id="taskList"></ul>
@@ -488,6 +516,7 @@
     const list = document.querySelector("#taskList");
     const empty = document.querySelector("#emptyState");
     const leftCount = document.querySelector("#leftCount");
+    const completeAll = document.querySelector("#completeAll");
     const clearDone = document.querySelector("#clearDone");
     const sortSelect = document.querySelector("#sortSelect");
     const toast = document.querySelector("#toast");
@@ -521,6 +550,19 @@
     sortSelect.addEventListener("change", () => {
       state.sort = sortSelect.value;
       render();
+    });
+
+    completeAll.addEventListener("click", () => {
+      const activeCount = state.tasks.filter((task) => !task.done).length;
+      if (!activeCount) {
+        showToast("没有未完成事项");
+        return;
+      }
+      state.tasks = state.tasks.map((task) => ({ ...task, done: true }));
+      state.editingId = null;
+      persist();
+      render();
+      showToast("已全部完成");
     });
 
     clearDone.addEventListener("click", () => {
@@ -610,6 +652,8 @@
       }).sort(compareTasks);
 
       leftCount.textContent = String(state.tasks.filter((task) => !task.done).length);
+      completeAll.disabled = !state.tasks.some((task) => !task.done);
+      completeAll.style.opacity = completeAll.disabled ? "0.45" : "1";
       clearDone.disabled = !state.tasks.some((task) => task.done);
       clearDone.style.opacity = clearDone.disabled ? "0.45" : "1";
       empty.style.display = visibleTasks.length ? "none" : "block";
