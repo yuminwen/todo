@@ -37,7 +37,8 @@
     }
 
     button,
-    input {
+    input,
+    select {
       font: inherit;
     }
 
@@ -200,6 +201,21 @@
     .filter.active {
       background: var(--primary);
       color: #fff;
+    }
+
+    .sort-select {
+      min-height: 34px;
+      padding: 0 34px 0 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    .sort-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
     }
 
     .clear-button {
@@ -392,6 +408,10 @@
         width: 100%;
       }
 
+      .sort-select {
+        width: 100%;
+      }
+
       .clear-button {
         align-self: flex-end;
       }
@@ -435,6 +455,11 @@
           <button class="filter" type="button" data-filter="active" role="tab" aria-selected="false">待办</button>
           <button class="filter" type="button" data-filter="done" role="tab" aria-selected="false">完成</button>
         </div>
+        <select class="sort-select" id="sortSelect" aria-label="排序方式">
+          <option value="default">默认排序</option>
+          <option value="due-asc">截止时间正序</option>
+          <option value="due-desc">截止时间倒序</option>
+        </select>
         <button class="clear-button" id="clearDone" type="button">清除已完成</button>
       </div>
 
@@ -453,6 +478,7 @@
     const state = {
       tasks: loadTasks(),
       filter: "all",
+      sort: "default",
       editingId: null
     };
 
@@ -463,6 +489,7 @@
     const empty = document.querySelector("#emptyState");
     const leftCount = document.querySelector("#leftCount");
     const clearDone = document.querySelector("#clearDone");
+    const sortSelect = document.querySelector("#sortSelect");
     const toast = document.querySelector("#toast");
     const today = document.querySelector("#today");
     const filters = document.querySelectorAll(".filter");
@@ -489,6 +516,11 @@
         });
         render();
       });
+    });
+
+    sortSelect.addEventListener("change", () => {
+      state.sort = sortSelect.value;
+      render();
     });
 
     clearDone.addEventListener("click", () => {
@@ -575,7 +607,7 @@
         if (state.filter === "active") return !task.done;
         if (state.filter === "done") return task.done;
         return true;
-      });
+      }).sort(compareTasks);
 
       leftCount.textContent = String(state.tasks.filter((task) => !task.done).length);
       clearDone.disabled = !state.tasks.some((task) => task.done);
@@ -679,9 +711,30 @@
       return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     }
 
+    function compareTasks(a, b) {
+      if (state.sort === "default") return 0;
+
+      const aDue = getDueTimestamp(a);
+      const bDue = getDueTimestamp(b);
+      const aHasDue = Number.isFinite(aDue);
+      const bHasDue = Number.isFinite(bDue);
+
+      if (!aHasDue && !bHasDue) return b.createdAt - a.createdAt;
+      if (!aHasDue) return 1;
+      if (!bHasDue) return -1;
+
+      const direction = state.sort === "due-asc" ? 1 : -1;
+      return (aDue - bDue) * direction || b.createdAt - a.createdAt;
+    }
+
+    function getDueTimestamp(task) {
+      if (!task.dueAt) return NaN;
+      return new Date(task.dueAt).getTime();
+    }
+
     function getDueState(task) {
       if (task.done || !task.dueAt) return "";
-      const dueTime = new Date(task.dueAt).getTime();
+      const dueTime = getDueTimestamp(task);
       if (Number.isNaN(dueTime)) return "";
       const now = Date.now();
       if (dueTime < now) return "overdue";
