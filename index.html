@@ -112,7 +112,7 @@
 
     .composer {
       display: grid;
-      grid-template-columns: 1fr 190px 46px;
+      grid-template-columns: 1fr 154px 46px;
       gap: 10px;
       padding: 14px;
       border-bottom: 1px solid var(--line);
@@ -486,7 +486,7 @@
     <section class="panel">
       <form class="composer" id="todoForm">
         <input class="task-input" id="taskInput" type="text" autocomplete="off" maxlength="80" placeholder="添加一个待办事项" aria-label="待办事项">
-        <input class="due-input" id="dueInput" type="datetime-local" aria-label="截止时间">
+        <input class="due-input" id="dueInput" type="date" aria-label="截止日期">
         <button class="add-button icon-button" type="submit" aria-label="添加待办" title="添加待办">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -500,8 +500,8 @@
         </div>
         <select class="sort-select" id="sortSelect" aria-label="排序方式">
           <option value="default">默认排序</option>
-          <option value="due-asc">截止时间正序</option>
-          <option value="due-desc">截止时间倒序</option>
+          <option value="due-asc">截止日期正序</option>
+          <option value="due-desc">截止日期倒序</option>
         </select>
         <div class="toolbar-actions">
           <button class="export-button" id="exportTxt" type="button">导出 TXT</button>
@@ -548,7 +548,7 @@
       month: "long",
       day: "numeric"
     }).format(new Date());
-    dueInput.min = toDateTimeInputValue(new Date());
+    dueInput.min = toDateInputValue(new Date());
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -618,7 +618,7 @@
       state.tasks.forEach((task, index) => {
         lines.push(`${index + 1}. [${task.done ? "已完成" : "待办"}] ${task.title}`);
         lines.push(`   创建时间：${formatFullDateTime(new Date(task.createdAt))}`);
-        lines.push(`   截止时间：${task.dueAt ? formatFullDateTime(new Date(task.dueAt)) : "无"}`);
+        lines.push(`   截止日期：${task.dueAt ? formatDueDate(task.dueAt) : "无"}`);
         lines.push("");
       });
 
@@ -645,7 +645,7 @@
       state.tasks.unshift({
         id: createId(),
         title,
-        dueAt: dueValue || "",
+        dueAt: normalizeDateValue(dueValue),
         done: false,
         createdAt: Date.now()
       });
@@ -762,7 +762,7 @@
           if (task.dueAt) {
             const due = document.createElement("span");
             due.className = `meta-chip due ${getDueState(task)}`;
-            due.textContent = `截止 ${formatDueTime(task.dueAt)}`;
+            due.textContent = `截止 ${formatDueDate(task.dueAt)}`;
             meta.append(due);
           }
 
@@ -832,16 +832,19 @@
 
     function getDueTimestamp(task) {
       if (!task.dueAt) return NaN;
-      return new Date(task.dueAt).getTime();
+      const dateValue = normalizeDateValue(task.dueAt);
+      if (!dateValue) return NaN;
+      const [year, month, day] = dateValue.split("-").map(Number);
+      return new Date(year, month - 1, day).getTime();
     }
 
     function getDueState(task) {
       if (task.done || !task.dueAt) return "";
       const dueTime = getDueTimestamp(task);
       if (Number.isNaN(dueTime)) return "";
-      const now = Date.now();
-      if (dueTime < now) return "overdue";
-      if (dueTime - now <= 24 * 60 * 60 * 1000) return "soon";
+      const todayTime = getStartOfToday().getTime();
+      if (dueTime < todayTime) return "overdue";
+      if (dueTime === todayTime) return "soon";
       return "";
     }
 
@@ -852,14 +855,15 @@
       }).format(new Date(timestamp));
     }
 
-    function formatDueTime(value) {
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return value;
+    function formatDueDate(value) {
+      const dateValue = normalizeDateValue(value);
+      if (!dateValue) return value;
+      const [year, month, day] = dateValue.split("-").map(Number);
+      const date = new Date(year, month - 1, day);
       return new Intl.DateTimeFormat("zh-CN", {
+        year: "numeric",
         month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
+        day: "2-digit"
       }).format(date);
     }
 
@@ -883,13 +887,29 @@
       ].join("") + `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
     }
 
-    function toDateTimeInputValue(date) {
+    function toDateInputValue(date) {
       const pad = (number) => String(number).padStart(2, "0");
       return [
         date.getFullYear(),
         pad(date.getMonth() + 1),
         pad(date.getDate())
-      ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+      ].join("-");
+    }
+
+    function getStartOfToday() {
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+
+    function normalizeDateValue(value) {
+      if (!value) return "";
+      const rawValue = String(value);
+      const dateMatch = rawValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateMatch) return dateMatch[0];
+
+      const date = new Date(rawValue);
+      if (Number.isNaN(date.getTime())) return "";
+      return toDateInputValue(date);
     }
 
     let toastTimer;
