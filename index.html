@@ -256,6 +256,19 @@
       background: #20342f;
     }
 
+    .export-button {
+      min-height: 34px;
+      padding: 0 10px;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--primary);
+      font-size: 14px;
+    }
+
+    .export-button:hover {
+      background: rgba(45, 212, 191, 0.14);
+    }
+
     .task-list {
       list-style: none;
       margin: 0;
@@ -491,6 +504,7 @@
           <option value="due-desc">截止时间倒序</option>
         </select>
         <div class="toolbar-actions">
+          <button class="export-button" id="exportTxt" type="button">导出 TXT</button>
           <button class="complete-all-button" id="completeAll" type="button">全部完成</button>
           <button class="clear-button" id="clearDone" type="button">清除已完成</button>
         </div>
@@ -521,6 +535,7 @@
     const list = document.querySelector("#taskList");
     const empty = document.querySelector("#emptyState");
     const leftCount = document.querySelector("#leftCount");
+    const exportTxt = document.querySelector("#exportTxt");
     const completeAll = document.querySelector("#completeAll");
     const clearDone = document.querySelector("#clearDone");
     const sortSelect = document.querySelector("#sortSelect");
@@ -557,6 +572,8 @@
       render();
     });
 
+    exportTxt.addEventListener("click", exportTasksAsTxt);
+
     completeAll.addEventListener("click", () => {
       const activeCount = state.tasks.filter((task) => !task.done).length;
       if (!activeCount) {
@@ -581,6 +598,41 @@
       render();
       showToast("已清除完成事项");
     });
+
+    function exportTasksAsTxt() {
+      if (!state.tasks.length) {
+        showToast("没有可导出的待办");
+        return;
+      }
+
+      const exportedAt = formatFullDateTime(new Date());
+      const activeCount = state.tasks.filter((task) => !task.done).length;
+      const doneCount = state.tasks.length - activeCount;
+      const lines = [
+        "待办清单导出",
+        `导出时间：${exportedAt}`,
+        `总数：${state.tasks.length}，未完成：${activeCount}，已完成：${doneCount}`,
+        ""
+      ];
+
+      state.tasks.forEach((task, index) => {
+        lines.push(`${index + 1}. [${task.done ? "已完成" : "待办"}] ${task.title}`);
+        lines.push(`   创建时间：${formatFullDateTime(new Date(task.createdAt))}`);
+        lines.push(`   截止时间：${task.dueAt ? formatFullDateTime(new Date(task.dueAt)) : "无"}`);
+        lines.push("");
+      });
+
+      const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `todo-list-${formatFileTimestamp(new Date())}.txt`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showToast("已导出 TXT");
+    }
 
     function addTask(value, dueValue) {
       const title = value.trim();
@@ -657,6 +709,8 @@
       }).sort(compareTasks);
 
       leftCount.textContent = String(state.tasks.filter((task) => !task.done).length);
+      exportTxt.disabled = !state.tasks.length;
+      exportTxt.style.opacity = exportTxt.disabled ? "0.45" : "1";
       completeAll.disabled = !state.tasks.some((task) => !task.done);
       completeAll.style.opacity = completeAll.disabled ? "0.45" : "1";
       clearDone.disabled = !state.tasks.some((task) => task.done);
@@ -807,6 +861,26 @@
         hour: "2-digit",
         minute: "2-digit"
       }).format(date);
+    }
+
+    function formatFullDateTime(date) {
+      if (Number.isNaN(date.getTime())) return "无效时间";
+      return new Intl.DateTimeFormat("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    }
+
+    function formatFileTimestamp(date) {
+      const pad = (number) => String(number).padStart(2, "0");
+      return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+      ].join("") + `-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
     }
 
     function toDateTimeInputValue(date) {
