@@ -107,14 +107,15 @@
 
     .composer {
       display: grid;
-      grid-template-columns: 1fr 46px;
+      grid-template-columns: 1fr 190px 46px;
       gap: 10px;
       padding: 14px;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
     }
 
-    .task-input {
+    .task-input,
+    .due-input {
       width: 100%;
       height: 46px;
       padding: 0 14px;
@@ -125,9 +126,14 @@
       outline: none;
     }
 
-    .task-input:focus {
+    .task-input:focus,
+    .due-input:focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+    }
+
+    .due-input {
+      color: var(--muted);
     }
 
     .icon-button {
@@ -262,9 +268,35 @@
     }
 
     .task-meta {
-      margin-top: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
       color: var(--muted);
       font-size: 12px;
+    }
+
+    .meta-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--panel-soft);
+      color: var(--muted);
+    }
+
+    .meta-chip.due {
+      color: var(--primary);
+    }
+
+    .meta-chip.soon {
+      color: var(--warning);
+    }
+
+    .meta-chip.overdue {
+      color: var(--danger);
+      background: #fff0ed;
     }
 
     .task-actions {
@@ -347,6 +379,15 @@
         flex-direction: column;
       }
 
+      .composer {
+        grid-template-columns: 1fr 46px;
+      }
+
+      .due-input {
+        grid-column: 1 / -1;
+        grid-row: 2;
+      }
+
       .filters {
         width: 100%;
       }
@@ -382,6 +423,7 @@
     <section class="panel">
       <form class="composer" id="todoForm">
         <input class="task-input" id="taskInput" type="text" autocomplete="off" maxlength="80" placeholder="添加一个待办事项" aria-label="待办事项">
+        <input class="due-input" id="dueInput" type="datetime-local" aria-label="截止时间">
         <button class="add-button icon-button" type="submit" aria-label="添加待办" title="添加待办">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -416,6 +458,7 @@
 
     const form = document.querySelector("#todoForm");
     const input = document.querySelector("#taskInput");
+    const dueInput = document.querySelector("#dueInput");
     const list = document.querySelector("#taskList");
     const empty = document.querySelector("#emptyState");
     const leftCount = document.querySelector("#leftCount");
@@ -429,10 +472,11 @@
       month: "long",
       day: "numeric"
     }).format(new Date());
+    dueInput.min = toDateTimeInputValue(new Date());
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      addTask(input.value);
+      addTask(input.value, dueInput.value);
     });
 
     filters.forEach((button) => {
@@ -459,7 +503,7 @@
       showToast("已清除完成事项");
     });
 
-    function addTask(value) {
+    function addTask(value, dueValue) {
       const title = value.trim();
       if (!title) {
         showToast("请输入待办内容");
@@ -470,11 +514,13 @@
       state.tasks.unshift({
         id: createId(),
         title,
+        dueAt: dueValue || "",
         done: false,
         createdAt: Date.now()
       });
 
       input.value = "";
+      dueInput.value = "";
       persist();
       render();
     }
@@ -572,7 +618,18 @@
 
           const meta = document.createElement("div");
           meta.className = "task-meta";
-          meta.textContent = formatTime(task.createdAt);
+
+          const created = document.createElement("span");
+          created.className = "meta-chip";
+          created.textContent = `创建 ${formatTime(task.createdAt)}`;
+          meta.append(created);
+
+          if (task.dueAt) {
+            const due = document.createElement("span");
+            due.className = `meta-chip due ${getDueState(task)}`;
+            due.textContent = `截止 ${formatDueTime(task.dueAt)}`;
+            meta.append(due);
+          }
 
           main.append(title, meta);
         }
@@ -622,11 +679,41 @@
       return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     }
 
+    function getDueState(task) {
+      if (task.done || !task.dueAt) return "";
+      const dueTime = new Date(task.dueAt).getTime();
+      if (Number.isNaN(dueTime)) return "";
+      const now = Date.now();
+      if (dueTime < now) return "overdue";
+      if (dueTime - now <= 24 * 60 * 60 * 1000) return "soon";
+      return "";
+    }
+
     function formatTime(timestamp) {
       return new Intl.DateTimeFormat("zh-CN", {
         hour: "2-digit",
         minute: "2-digit"
       }).format(new Date(timestamp));
+    }
+
+    function formatDueTime(value) {
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+      return new Intl.DateTimeFormat("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      }).format(date);
+    }
+
+    function toDateTimeInputValue(date) {
+      const pad = (number) => String(number).padStart(2, "0");
+      return [
+        date.getFullYear(),
+        pad(date.getMonth() + 1),
+        pad(date.getDate())
+      ].join("-") + `T${pad(date.getHours())}:${pad(date.getMinutes())}`;
     }
 
     let toastTimer;
